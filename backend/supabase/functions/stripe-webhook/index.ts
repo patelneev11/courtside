@@ -26,7 +26,8 @@ serve(async (req) => {
 async function handle(db: ReturnType<typeof adminClient>, event: any) {
   const o = event.data.object;
   switch (event.type) {
-    case 'checkout.session.completed': {
+    case 'checkout.session.completed':
+    case 'checkout.session.async_payment_succeeded': {
       if (o.payment_status !== 'paid') return;
       const invoiceId = o.metadata?.invoice_id ?? o.client_reference_id;
       let charge: any = null;
@@ -48,11 +49,13 @@ async function handle(db: ReturnType<typeof adminClient>, event: any) {
       });
       if (error) throw error;
       if (settled?.status === 'void' && stripeConfigured() && o.payment_intent) {
-        await stripe('POST', 'refunds', { payment_intent: o.payment_intent, metadata: { reason: 'booking_cancelled', invoice_id: invoiceId } });
+        // Destination charges: pull the coach's transfer and the platform fee back too.
+        await stripe('POST', 'refunds', { payment_intent: o.payment_intent, ...(settled.payee_coach_id ? { reverse_transfer: true, refund_application_fee: true } : {}), metadata: { reason: 'booking_cancelled', invoice_id: invoiceId } });
       }
       return;
     }
-    case 'checkout.session.expired': {
+    case 'checkout.session.expired':
+    case 'checkout.session.async_payment_failed': {
       await db.from('invoices').update({ status: 'open', stripe_checkout_session_id: null }).eq('stripe_checkout_session_id', o.id).eq('status', 'processing');
       return;
     }
