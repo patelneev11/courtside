@@ -54,6 +54,9 @@ Deno.test({ name: 'reels import: student imports go to moderation, admins publis
   assertEquals(feed, { embed_url: `https://www.instagram.com/reel/${code}/embed/captioned/`, category: 'FOOTWORK' });
   const selfPublish = await s.db.from('reels').update({ status: 'published' }).eq('external_id', code).select('id');
   assertEquals(selfPublish.data?.length ?? 0, 0);
+  const again = await fn('reels-import', (await student2()).token, { urls: [`https://www.instagram.com/reel/${code}/`], category: '<b>x</b>', verify: false });
+  assertEquals(again.json.results[0].already_imported, true);
+  assertEquals((await anon().from('reel_feed').select('category').eq('external_id', code).single()).data?.category, 'FOOTWORK', 're-import cannot unpublish or edit');
 }});
 
 Deno.test({ name: 'market search checks every retailer and stores ranked offers', ...opts_, fn: async () => {
@@ -96,5 +99,6 @@ Deno.test({ name: 'calendar feed serves ICS for a private token only', ...opts_,
   const r = await fn(`calendar-feed?token=${link!.feed_token}`, null);
   assertEquals(r.status, 200);
   assert(r.text.startsWith('BEGIN:VCALENDAR'));
+  assert(r.text.includes('BEGIN:VEVENT'), 'feed lists the student\'s bookings');
   assertEquals((await fn(`calendar-feed?token=${crypto.randomUUID()}`, null)).status, 404);
 }});
