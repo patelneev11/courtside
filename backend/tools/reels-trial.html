@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Courtside · Instagram Reels trial</title>
+<style>
+  :root { --ecru:#EDE8DC; --ink:#231F1D; --sage:#5C7457; }
+  body { margin:0; background:var(--ecru); color:var(--ink); font-family: "EB Garamond", Garamond, serif; }
+  header { padding:24px 28px 8px; }
+  h1 { font-style:italic; font-weight:500; margin:0; font-size:34px; }
+  p, label, button, input, textarea, code { font-family: system-ui, sans-serif; font-size:14px; }
+  form { display:grid; gap:8px; padding:0 28px 16px; max-width:720px; }
+  textarea { min-height:70px; border:1px solid #231F1D33; border-radius:12px; padding:10px; background:#fff8; }
+  button { background:var(--sage); color:var(--ecru); border:0; border-radius:12px; padding:10px 16px; cursor:pointer; justify-self:start; }
+  #status { padding:0 28px; white-space:pre-wrap; }
+  #feed { display:flex; gap:20px; overflow-x:auto; padding:16px 28px 40px; }
+  .reel { flex:0 0 340px; border:1px solid #231F1D22; border-radius:20px; padding:12px; background:#fff6; }
+  .reel small { display:block; letter-spacing:.08em; color:var(--sage); margin:4px 0 8px; font-family:system-ui; }
+  iframe { width:100%; height:600px; border:0; border-radius:14px; background:#fff; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Aces · Instagram Reels trial</h1>
+  <p>Backend test page (not part of the app). Paste Instagram reel/post links, import them through the <code>reels-import</code> function, then play them from the <code>reel_feed</code> view via Instagram's official embed.</p>
+</header>
+<form id="f">
+  <label>Instagram links (one per line)</label>
+  <textarea id="urls">https://www.instagram.com/p/DRBC_YICG56/
+https://www.instagram.com/p/ClMrTXxjATV/
+https://www.instagram.com/p/ClMlzxAA5I7/</textarea>
+  <label>Category <input id="cat" value="PRO HIGHLIGHTS" /></label>
+  <button>Import as editor (admin)</button>
+</form>
+<div id="status"></div>
+<section id="feed"></section>
+<script type="module">
+  const API = 'http://127.0.0.1:54321';
+  const ANON = new URLSearchParams(location.search).get('anon') || 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH';
+  const status = (t) => (document.getElementById('status').textContent = t);
+  async function token() {
+    const r = await fetch(`${API}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@courtside.dev', password: 'courtside-demo' }) });
+    return (await r.json()).access_token;
+  }
+  async function load() {
+    const r = await fetch(`${API}/rest/v1/reel_feed?select=*&order=published_at.desc`, { headers: { apikey: ANON } });
+    const reels = await r.json();
+    document.getElementById('feed').innerHTML = reels.map((x) => `
+      <article class="reel"><small>${x.category} · ${x.creator_handle || 'instagram'}</small>
+      <iframe src="${x.embed_url}" loading="lazy" allowtransparency="true" allowfullscreen scrolling="no"></iframe></article>`).join('');
+    if (!reels.length) status('No published reels yet. Import some above.');
+  }
+  document.getElementById('f').onsubmit = async (e) => {
+    e.preventDefault();
+    status('Importing…');
+    const urls = document.getElementById('urls').value.split(/\s+/).filter(Boolean);
+    const t = await token();
+    const r = await fetch(`${API}/functions/v1/reels-import`, { method: 'POST', headers: { Authorization: `Bearer ${t}`, apikey: ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls, category: document.getElementById('cat').value }) });
+    status(JSON.stringify(await r.json(), null, 2));
+    load();
+  };
+  load();
+</script>
+</body>
+</html>
