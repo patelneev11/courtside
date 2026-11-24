@@ -23,6 +23,12 @@ export function stripeConfigured(): boolean {
   return Boolean(Deno.env.get('STRIPE_SECRET_KEY'));
 }
 
+export class StripeError extends Error {
+  constructor(readonly status: number, readonly code: string | undefined, message: string) {
+    super(message);
+  }
+}
+
 export async function stripe<T = any>(method: 'GET' | 'POST', path: string, params: Record<string, unknown> = {}, fetchImpl: typeof fetch = fetch): Promise<T> {
   const key = Deno.env.get('STRIPE_SECRET_KEY');
   if (!key) throw new Error('STRIPE_SECRET_KEY is not configured');
@@ -34,7 +40,7 @@ export async function stripe<T = any>(method: 'GET' | 'POST', path: string, para
     body: method === 'POST' ? body : undefined,
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(`Stripe ${res.status}: ${data?.error?.message ?? 'request failed'}`);
+  if (!res.ok) throw new StripeError(res.status, data?.error?.code, `Stripe ${res.status}: ${data?.error?.message ?? 'request failed'}`);
   return data as T;
 }
 

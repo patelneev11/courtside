@@ -1,5 +1,5 @@
 import { adminClient, env, HttpError, json, serve } from '../_shared/http.ts';
-import { stripe, stripeConfigured, verifyStripeSignature } from '../_shared/stripe.ts';
+import { stripe, StripeError, stripeConfigured, verifyStripeSignature } from '../_shared/stripe.ts';
 
 // Stripe -> POST /stripe-webhook. Deploy with --no-verify-jwt; authenticity comes from the signature.
 serve(async (req) => {
@@ -54,7 +54,8 @@ async function handle(db: ReturnType<typeof adminClient>, event: any) {
           // Destination charges: pull the coach's transfer and the platform fee back too.
           await stripe('POST', 'refunds', { payment_intent: o.payment_intent, ...(settled.payee_coach_id ? { reverse_transfer: true, refund_application_fee: true } : {}), metadata });
         } catch (e) {
-          if (!settled.payee_coach_id) throw e;
+          // Only when the coach's balance can't cover it; anything else (rate limits, outages) retries via Stripe redelivery.
+          if (!settled.payee_coach_id || !(e instanceof StripeError) || e.code !== 'balance_insufficient') throw e;
           // Coach balance can't cover the reversal: refund the customer anyway; the platform absorbs it.
           console.error('transfer reversal failed; refunding from platform balance', invoiceId, e);
           await stripe('POST', 'refunds', { payment_intent: o.payment_intent, metadata: { ...metadata, transfer_reversed: 'false' } });
