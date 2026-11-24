@@ -1,15 +1,19 @@
 {
-  "name": "backend",
+  "name": "courtside-backend",
   "version": "1.0.0",
-  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "supabase start",
+    "stop": "supabase stop",
+    "reset": "supabase db reset",
+    "functions": "supabase functions serve --env-file supabase/functions/.env",
+    "check": "cd supabase/functions && deno check */index.ts && deno lint",
+    "test:unit": "deno test --config tests/deno.json --allow-env --allow-net tests/unit",
+    "test:integration": "./scripts/test-integration.sh",
+    "test": "npm run test:unit && npm run test:integration"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "description": "Courtside backend: Supabase schema, RLS and Edge Functions",
   "devDependencies": {
     "supabase": "^3.3.0"
-  }
+  },
+  "private": true
 }

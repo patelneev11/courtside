@@ -1,0 +1,28 @@
+name: backend
+on:
+  pull_request:
+    paths: ['backend/**', '.github/workflows/backend.yml']
+  push:
+    branches: [main]
+    paths: ['backend/**']
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - run: npm ci
+      - run: npm run check
+      - run: npm run test:unit
+      - run: npx supabase start -x studio,imgproxy,vector,logflare,supavisor,mailpit
+      - run: cp supabase/functions/.env.example supabase/functions/.env
+      - run: npx supabase functions serve --env-file supabase/functions/.env > /tmp/functions.log 2>&1 &
+      - run: sleep 15 && npm run test:integration
+      - if: failure()
+        run: cat /tmp/functions.log

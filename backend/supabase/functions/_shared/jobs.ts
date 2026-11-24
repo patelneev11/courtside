@@ -1,4 +1,4 @@
-import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.49.4';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface StepDef {
   key: string;

@@ -1,4 +1,4 @@
-import { assert, assertAlmostEquals, assertEquals } from 'jsr:@std/assert@1';
+import { assert, assertAlmostEquals, assertEquals } from '@std/assert';
 import { callClaude } from '../../supabase/functions/_shared/claude.ts';
 import { acuteChronicRatio, normaliseTo100, playstyle, racket } from '../../supabase/functions/tennis-agent/tasks.ts';
 

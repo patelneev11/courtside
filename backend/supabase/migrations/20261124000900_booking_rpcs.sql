@@ -26,7 +26,7 @@ begin
 
   update public.court_slots set status = 'booked', held_until = null where id = s.id;
   insert into public.court_reservations (slot_id, player_id, price_cents, status)
-  values (s.id, me, cents, case when cents = 0 then 'confirmed' else 'pending_payment' end)
+  values (s.id, me, cents, case when cents = 0 then 'confirmed' else 'pending_payment' end::public.booking_status)
   returning * into r;
 
   if cents > 0 then
@@ -74,7 +74,7 @@ begin
   update public.coach_availability set booked = true where id = a.id;
   insert into public.lessons (coach_id, student_id, availability_id, kind, starts_at, ends_at, court_id, price_cents, status)
   values (a.coach_id, me, a.id, p_kind, a.starts_at, a.ends_at, coalesce(p_court, a.court_id), cents,
-          case when cents = 0 then 'confirmed' else 'pending_payment' end)
+          case when cents = 0 then 'confirmed' else 'pending_payment' end::public.booking_status)
   returning * into l;
 
   insert into public.coach_students (coach_id, student_id) values (a.coach_id, me) on conflict do nothing;
@@ -111,7 +111,7 @@ begin
   if taken >= c.capacity then raise exception 'class is full'; end if;
 
   insert into public.class_enrollments (class_id, student_id, status)
-  values (c.id, me, case when c.price_cents = 0 then 'confirmed' else 'pending_payment' end)
+  values (c.id, me, case when c.price_cents = 0 then 'confirmed' else 'pending_payment' end::public.booking_status)
   on conflict (class_id, student_id) do update set status = excluded.status
     where public.class_enrollments.status = 'cancelled'
   returning * into e;

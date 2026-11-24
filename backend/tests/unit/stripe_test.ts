@@ -1,4 +1,4 @@
-import { assertEquals } from 'jsr:@std/assert@1';
+import { assertEquals } from '@std/assert';
 import { formEncode, signStripePayload, verifyStripeSignature } from '../../supabase/functions/_shared/stripe.ts';
 
 Deno.test('form-encodes nested objects and arrays the way Stripe expects', () => {

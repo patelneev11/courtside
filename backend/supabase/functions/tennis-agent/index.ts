@@ -1,4 +1,4 @@
-import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.49.4';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { callClaude } from '../_shared/claude.ts';
 import { adminClient, HttpError, json, readJson, requireUser, serve } from '../_shared/http.ts';
 import { AgentJob } from '../_shared/jobs.ts';

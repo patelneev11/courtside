@@ -1,4 +1,4 @@
-import { assert, assertEquals } from 'jsr:@std/assert@1';
+import { assert, assertEquals } from '@std/assert';
 import { rankOffers, RETAILERS, titleMatch } from '../../supabase/functions/market-search/retailers.ts';
 import { toIcs } from '../../supabase/functions/calendar-feed/ics.ts';
 

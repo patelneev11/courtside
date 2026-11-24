@@ -1,4 +1,4 @@
-import { assertEquals } from 'jsr:@std/assert@1';
+import { assertEquals } from '@std/assert';
 import { checkEmbed, fetchOEmbed, parseInstagramUrl } from '../../supabase/functions/reels-import/instagram.ts';
 
 Deno.test('parses reel, reels, post and tv URLs to a canonical embed', () => {
