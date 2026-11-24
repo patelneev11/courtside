@@ -116,6 +116,8 @@ Deno.test({ name: 'review hardening: private profiles, message and lesson column
   assertEquals((await s.db.from('profiles').select('id').eq('id', IDS.elena)).data?.length, 1, 'coaches stay listed');
   await svc.from('profiles').update({ settings: { ...p2!.settings, privacy: { profile_public: 'nope' } } }).eq('id', IDS.student2);
   assertEquals((await s.db.from('profiles').select('id')).error, null, 'malformed privacy values cannot break profile reads');
+  await svc.from('profiles').update({ settings: { ...p2!.settings, privacy: { profile_public: 'false' } } }).eq('id', IDS.student2);
+  assertEquals((await s.db.from('profiles').select('id').eq('id', IDS.student2)).data?.length, 0, 'string "false" also opts out');
   await svc.from('profiles').update({ settings: p2!.settings }).eq('id', IDS.student2);
 
   const { data: convo } = await svc.from('conversations').upsert({ student_id: IDS.student, coach_id: IDS.elena }, { onConflict: 'student_id,coach_id' }).select('id').single();

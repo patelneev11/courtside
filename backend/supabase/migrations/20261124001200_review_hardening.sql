@@ -6,7 +6,7 @@ drop policy "profiles are readable by signed-in users" on public.profiles;
 create policy "profiles are readable when public or related" on public.profiles for select to authenticated using (
   id = (select auth.uid())
   or role <> 'student'
-  or (settings -> 'privacy' -> 'profile_public') is distinct from 'false'::jsonb
+  or lower(settings -> 'privacy' ->> 'profile_public') is distinct from 'false'
   or public.is_admin()
   or exists (select 1 from public.coach_students cs
              where (cs.coach_id = (select auth.uid()) and cs.student_id = profiles.id)
@@ -22,7 +22,7 @@ language sql stable security definer set search_path = '' as $$
       join public.profiles p on p.id = cs.student_id
       where cs.coach_id = (select auth.uid())
         and cs.student_id = player
-        and (p.settings -> 'privacy' -> 'share_stats_with_coaches') is distinct from 'false'::jsonb
+        and lower(p.settings -> 'privacy' ->> 'share_stats_with_coaches') is distinct from 'false'
     );
 $$;
 
