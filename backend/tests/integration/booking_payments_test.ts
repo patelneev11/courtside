@@ -128,4 +128,11 @@ Deno.test({ name: 'review hardening: package credits use the price-time snapshot
   await svc.from('lesson_packages').update({ lesson_count: 30 }).eq('id', pk!.id);
   assertEquals((await fn('payments-checkout', s.token, { invoice_id: inv.id })).status, 200);
   assertEquals((await svc.from('lesson_credits').select('remaining').eq('package_id', pk!.id).single()).data?.remaining, 3);
+  const { data: inv2 } = await s.db.rpc('buy_lesson_package', { p_package: pk!.id });
+  assertEquals((await fn('payments-checkout', s.token, { invoice_id: inv2.id })).status, 200);
+  const { data: paid1 } = await svc.from('invoices').select('stripe_payment_intent_id').eq('id', inv.id).single();
+  await svc.rpc('refund_invoice', { p_payment_intent: paid1!.stripe_payment_intent_id });
+  const { data: credits } = await svc.from('lesson_credits').select('invoice_id, remaining').eq('package_id', pk!.id);
+  assertEquals(credits?.find((c) => c.invoice_id === inv.id)?.remaining, 0);
+  assertEquals(credits?.find((c) => c.invoice_id === inv2.id)?.remaining, 30, 'second purchase keeps its credits');
 }});
