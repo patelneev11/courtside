@@ -706,7 +706,7 @@ export default function App() {
     {content}
     <nav className="mobile-nav">{nav.map(item=><button key={item.name} className={active===item.name?'active':''} onClick={()=>setActive(item.name)}><Icon name={item.icon}/><small>{item.name}</small></button>)}</nav>
     {profile && <ProfileDrawer close={()=>setProfile(false)} dark={dark} setDark={setDark} me={me.data} onSaved={()=>{setVersion(v=>v+1); me.reload()}}/>}
-    {checkout && <Checkout item={checkout} close={()=>setCheckout(null)} onPaid={()=>setVersion(v=>v+1)}/>}
+    {checkout && <Checkout item={checkout} close={()=>setCheckout(null)} onPaid={()=>{setVersion(v=>v+1); me.reload()}}/>}
   </div>
 }
 
