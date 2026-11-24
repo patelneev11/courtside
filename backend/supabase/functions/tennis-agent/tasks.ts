@@ -218,3 +218,16 @@ export function acuteChronicRatio(sessions: { started_at: string; duration_s: nu
   if (chronicWeekly === 0) return acute > 0 ? 1.5 : 1;
   return acute / chronicWeekly;
 }
+
+// ---- coach_chat -----------------------------------------------------------------------------
+export interface CoachChat {
+  reply: string;
+}
+export const coachChat = {
+  task: 'You are the player\'s tennis coach. Answer their question in at most 70 words, grounded in their latest match stats, swing findings and active drills from the input. Quote numbers only from the input; if the input lacks something, say so instead of guessing.',
+  schema: obj({ reply: str }),
+  mock(question: string, finding?: string | null): CoachChat {
+    const lead = finding ? `Your latest swing finding: ${finding}` : 'I don\'t have a swing analysis for you yet.';
+    return { reply: `${lead} On "${question.slice(0, 80)}", start with an earlier unit turn and hold the finish for one full count in your next session.` };
+  },
+};

@@ -36,6 +36,10 @@ react(),
       host: process.env.FIGMA_DEV_SERVER_HOST || '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
       strictPort: true,
+      // Lets VITE_SUPABASE_URL=/ reach a local Supabase stack through the dev server.
+      proxy: {
+        '^/(auth|rest|functions|storage|realtime)/v1': { target: process.env.SUPABASE_PROXY_TARGET || 'http://127.0.0.1:54321', changeOrigin: true, ws: true },
+      },
       watch: {
         ignored: [
           '**/.figma/**',
