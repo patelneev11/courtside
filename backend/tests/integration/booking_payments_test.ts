@@ -87,3 +87,45 @@ Deno.test({ name: 'lesson package payment grants credits that pay for a lesson',
   assertEquals((await s.db.from('lesson_credits').select('remaining').eq('id', before.id).single()).data?.remaining, before.remaining - 1);
   assertEquals((await s.db.from('lesson_credits').select('remaining').eq('package_id', pk!.id).order('created_at', { ascending: false }).limit(1).single()).data?.remaining! >= 9, true);
 }});
+
+Deno.test({ name: 'review hardening: holds belong to their player; cancelled lessons rebook; refunds only touch their own booking', ...opts_, fn: async () => {
+  const svc = service();
+  const s = await student();
+  const s2 = await student2();
+
+  const held = await openSlot();
+  await svc.from('court_slots').update({ status: 'held', held_until: new Date(Date.now() + 600_000).toISOString(), held_by: IDS.student }).eq('id', held);
+  const { data: alert } = await s2.db.from('court_alerts').select('id').limit(1).maybeSingle();
+  if (alert) await s2.db.from('court_alerts').update({ last_notified_slot: held, auto_hold: true }).eq('id', alert.id);
+  assert((await s2.db.rpc('reserve_court_slot', { p_slot: held })).error?.message.includes('held'), 'alert edits cannot claim a hold');
+  assertEquals((await s.db.rpc('reserve_court_slot', { p_slot: held })).error, null);
+
+  // Cancel mid-checkout voids the invoice; the slot can be rebooked; refunding the old payment leaves the new booking alone.
+  const { data: av } = await svc.from('coach_availability').select('id').eq('coach_id', IDS.elena).eq('booked', false).order('starts_at').limit(1).single();
+  const { data: first } = await s.db.rpc('book_lesson', { p_availability: av!.id, p_kind: 'private' });
+  await svc.from('invoices').update({ status: 'processing' }).eq('id', first.invoice_id);
+  assertEquals((await s.db.rpc('cancel_booking', { p_kind: 'lesson', p_id: first.id })).error, null);
+  assertEquals((await svc.from('invoices').select('status').eq('id', first.invoice_id).single()).data?.status, 'void');
+  const late = await svc.rpc('settle_invoice', { p_invoice: first.invoice_id, p_payment_intent: `pi_${crypto.randomUUID()}`, p_charge: null, p_receipt_url: null, p_card_brand: null, p_card_last4: null });
+  assertEquals(late.data?.status, 'void', 'late payment is flagged for refund, booking stays cancelled');
+
+  const { data: second, error } = await s2.db.rpc('book_lesson', { p_availability: av!.id, p_kind: 'private' });
+  assertEquals(error, null, 'cancelled lesson slot can be rebooked');
+  await svc.rpc('refund_invoice', { p_payment_intent: late.data.stripe_payment_intent_id });
+  assertEquals((await svc.from('lessons').select('status').eq('id', second.id).single()).data?.status, 'pending_payment');
+  assertEquals((await svc.from('coach_availability').select('booked').eq('id', av!.id).single()).data?.booked, true);
+
+  const pay = await fn('payments-checkout', s2.token, { invoice_id: second.invoice_id });
+  assertEquals(pay.status, 200, pay.text);
+  assert((await s2.db.rpc('cancel_booking', { p_kind: 'lesson', p_id: second.id })).error?.message.includes('refund'), 'paid bookings need a refund');
+}});
+
+Deno.test({ name: 'review hardening: package credits use the price-time snapshot', ...opts_, fn: async () => {
+  const svc = service();
+  const s = await student2();
+  const { data: pk } = await svc.from('lesson_packages').insert({ coach_id: IDS.elena, title: 'Trial pack', lesson_count: 3, price_cents: 20000 }).select('id').single();
+  const { data: inv } = await s.db.rpc('buy_lesson_package', { p_package: pk!.id });
+  await svc.from('lesson_packages').update({ lesson_count: 30 }).eq('id', pk!.id);
+  assertEquals((await fn('payments-checkout', s.token, { invoice_id: inv.id })).status, 200);
+  assertEquals((await svc.from('lesson_credits').select('remaining').eq('package_id', pk!.id).single()).data?.remaining, 3);
+}});

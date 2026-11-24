@@ -104,3 +104,38 @@ Deno.test({ name: 'exact match stats come from logged points', ...opts_, fn: asy
   const other = await (await student2()).db.rpc('compute_match_stats', { p_match: m!.id });
   assert(other.error || !other.data?.id, "cannot compute someone else's match");
 }});
+
+Deno.test({ name: 'review hardening: private profiles, message and lesson column limits, swing uploads, pathway', ...opts_, fn: async () => {
+  const svc = service();
+  const s = await student();
+  const s2 = await student2();
+  const { data: p2 } = await svc.from('profiles').select('settings').eq('id', IDS.student2).single();
+  await svc.from('profiles').update({ settings: { ...p2!.settings, privacy: { ...(p2!.settings?.privacy ?? {}), profile_public: false } } }).eq('id', IDS.student2);
+  assertEquals((await s.db.from('profiles').select('id').eq('id', IDS.student2)).data?.length, 0, 'private profile hidden from strangers');
+  assertEquals((await s2.db.from('profiles').select('id').eq('id', IDS.student2)).data?.length, 1, 'owner still sees it');
+  assertEquals((await s.db.from('profiles').select('id').eq('id', IDS.elena)).data?.length, 1, 'coaches stay listed');
+  await svc.from('profiles').update({ settings: p2!.settings }).eq('id', IDS.student2);
+
+  const { data: convo } = await svc.from('conversations').upsert({ student_id: IDS.student, coach_id: IDS.elena }, { onConflict: 'student_id,coach_id' }).select('id').single();
+  const { data: msg } = await svc.from('messages').insert({ conversation_id: convo!.id, sender_id: IDS.elena, body: 'original' }).select('id').single();
+  assert((await s.db.from('messages').update({ body: 'tampered' }).eq('id', msg!.id)).error, 'recipient cannot rewrite body');
+  assertEquals((await s.db.from('messages').update({ read_at: new Date().toISOString() }).eq('id', msg!.id)).error, null);
+  assertEquals((await svc.from('messages').select('body').eq('id', msg!.id).single()).data?.body, 'original');
+
+  const e = await elena();
+  const { data: lesson } = await svc.from('lessons').select('id').eq('coach_id', IDS.elena).limit(1).maybeSingle();
+  if (lesson) {
+    assert((await e.db.from('lessons').update({ status: 'confirmed' }).eq('id', lesson.id)).error, 'coach cannot change status directly');
+    assertEquals((await e.db.from('lessons').update({ notes: 'work on split step' }).eq('id', lesson.id)).error, null);
+  }
+
+  const ok = await s.db.from('swing_analyses').insert({ player_id: IDS.student, source: 'upload', stroke: 'serve', video_path: `${IDS.student}/new.mp4` }).select('id, status').single();
+  assertEquals([ok.error, ok.data?.status], [null, 'queued']);
+  assert((await s.db.from('swing_analyses').insert({ player_id: IDS.student, source: 'upload', video_path: `${IDS.student2}/x.mp4` })).error, 'must upload into own folder');
+  assert((await s.db.from('swing_analyses').insert({ player_id: IDS.student, source: 'upload', video_path: `${IDS.student}/y.mp4`, overall_score: 99 })).error, 'cannot forge results');
+
+  const { data: stage } = await svc.from('pathway_stages').select('id, lessons').order('position').limit(1).single();
+  const done = await s2.db.rpc('complete_pathway_lesson', { p_stage: stage!.id, p_lesson: stage!.lessons[0].key });
+  assertEquals(done.error, null);
+  assert(done.data.completed_lessons.includes(stage!.lessons[0].key));
+}});

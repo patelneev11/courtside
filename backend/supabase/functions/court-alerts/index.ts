@@ -17,7 +17,7 @@ serve(async (req) => {
     let isHeld = false;
     if (m.auto_hold) {
       const until = new Date(Date.now() + HOLD_MINUTES * 60_000).toISOString();
-      const { data } = await db.from('court_slots').update({ status: 'held', held_until: until }).eq('id', m.slot_id).eq('status', 'open').select('id');
+      const { data } = await db.from('court_slots').update({ status: 'held', held_until: until, held_by: m.player_id }).eq('id', m.slot_id).eq('status', 'open').select('id');
       isHeld = Boolean(data?.length);
       if (isHeld) held++;
     }
