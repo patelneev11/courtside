@@ -28,6 +28,12 @@ serve(async (req) => {
     return json({ mock: true, status: 'paid', payment_intent: pi });
   }
 
+  if (inv.status === 'processing' && inv.stripe_checkout_session_id) {
+    const open = await stripe('GET', `checkout/sessions/${inv.stripe_checkout_session_id}`);
+    if (open.status === 'open') return json({ checkout_url: open.url, session_id: open.id });
+    if (open.status === 'complete') throw new HttpError(409, 'payment is already being processed');
+  }
+
   // Customer per user, created lazily.
   let { data: acct } = await admin.from('billing_accounts').select('*').eq('profile_id', user.id).maybeSingle();
   if (!acct?.stripe_customer_id) {

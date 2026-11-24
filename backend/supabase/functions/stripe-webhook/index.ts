@@ -42,11 +42,14 @@ async function handle(db: ReturnType<typeof adminClient>, event: any) {
         }
       }
       const card = charge?.payment_method_details?.card;
-      const { error } = await db.rpc('settle_invoice', {
+      const { data: settled, error } = await db.rpc('settle_invoice', {
         p_invoice: invoiceId, p_payment_intent: o.payment_intent, p_charge: charge?.id ?? null, p_receipt_url: charge?.receipt_url ?? null,
         p_card_brand: card?.brand ?? null, p_card_last4: card?.last4 ?? null, p_application_fee_cents: Number(o.metadata?.application_fee_cents ?? 0),
       });
       if (error) throw error;
+      if (settled?.status === 'void' && stripeConfigured() && o.payment_intent) {
+        await stripe('POST', 'refunds', { payment_intent: o.payment_intent, metadata: { reason: 'booking_cancelled', invoice_id: invoiceId } });
+      }
       return;
     }
     case 'checkout.session.expired': {
