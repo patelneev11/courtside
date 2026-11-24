@@ -49,7 +49,7 @@ https://www.instagram.com/p/ClMlzxAA5I7/</textarea>
     const reels = await r.json();
     document.getElementById('feed').innerHTML = reels.map((x) => `
       <article class="reel"><small>${x.category} · ${x.creator_handle || 'instagram'}</small>
-      <iframe src="${x.embed_url}" loading="lazy" allowtransparency="true" allowfullscreen scrolling="no"></iframe></article>`).join('');
+      <iframe src="${x.embed_url}" allowtransparency="true" allowfullscreen scrolling="no"></iframe></article>`).join('');
     if (!reels.length) status('No published reels yet. Import some above.');
   }
   document.getElementById('f').onsubmit = async (e) => {

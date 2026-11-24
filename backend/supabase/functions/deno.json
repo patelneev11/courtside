@@ -1,0 +1,5 @@
+{
+  "nodeModulesDir": "none",
+  "lint": { "rules": { "exclude": ["no-explicit-any"] } },
+  "fmt": { "singleQuote": true, "lineWidth": 160 }
+}
