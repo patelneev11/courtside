@@ -44,12 +44,13 @@ https://www.instagram.com/p/ClMlzxAA5I7/</textarea>
       body: JSON.stringify({ email: 'admin@courtside.dev', password: 'courtside-demo' }) });
     return (await r.json()).access_token;
   }
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   async function load() {
     const r = await fetch(`${API}/rest/v1/reel_feed?select=*&order=published_at.desc`, { headers: { apikey: ANON } });
     const reels = await r.json();
     document.getElementById('feed').innerHTML = reels.map((x) => `
-      <article class="reel"><small>${x.category} · ${x.creator_handle || 'instagram'}</small>
-      <iframe src="${x.embed_url}" allowtransparency="true" allowfullscreen scrolling="no"></iframe></article>`).join('');
+      <article class="reel"><small>${esc(x.category)} · ${esc(x.creator_handle || 'instagram')}</small>
+      <iframe src="${esc(x.embed_url)}" allowtransparency="true" allowfullscreen scrolling="no"></iframe></article>`).join('');
     if (!reels.length) status('No published reels yet. Import some above.');
   }
   document.getElementById('f').onsubmit = async (e) => {

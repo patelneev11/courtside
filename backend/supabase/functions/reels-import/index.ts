@@ -33,6 +33,13 @@ serve(async (req) => {
       continue;
     }
     try {
+      if (!isAdmin) {
+        const { data: existing } = await db.from('reels').select('id, status, embed_url').eq('source', 'instagram').eq('external_id', parsed.shortcode).maybeSingle();
+        if (existing) {
+          results.push({ url: raw, ok: true, reel: existing, already_imported: true });
+          continue;
+        }
+      }
       const check = body.verify === false ? { ok: true, handle: null } : await checkEmbed(parsed.embedUrl);
       if (!check.ok) {
         results.push({ url: raw, ok: false, error: 'post is private, deleted or not embeddable' });
@@ -57,9 +64,9 @@ serve(async (req) => {
       };
       const { data, error } = await db
         .from('reels')
-        .upsert(row, { onConflict: 'source,external_id', ignoreDuplicates: false })
+        .upsert(row, { onConflict: 'source,external_id', ignoreDuplicates: !isAdmin })
         .select('id, status, embed_url')
-        .single();
+        .maybeSingle();
       if (error) throw error;
       results.push({ url: raw, ok: true, reel: data, enriched: Boolean(o) });
     } catch (e) {
