@@ -45,6 +45,8 @@ export function useData<T>(load: () => Promise<T>, deps: unknown[] = []) {
   const [data, setData] = useState<T>()
   const [error, setError] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setData(undefined); setError(null) }, deps)
   useEffect(() => {
     if (!live) return
     let cancelled = false
@@ -70,7 +72,8 @@ const uid = async () => {
 // ---- checkout ----------------------------------------------------------------------------------
 export interface CheckoutItem { label: string; amount: string; invoiceId?: string }
 
-export async function invoiceItem(invoiceId: string): Promise<CheckoutItem> {
+export async function invoiceItem(invoiceId: string | null): Promise<CheckoutItem | null> {
+  if (!invoiceId) return null
   const inv = ok(await db().from('invoices').select('id, description, amount_cents').eq('id', invoiceId).single())
   return { label: inv.description, amount: money(inv.amount_cents), invoiceId: inv.id }
 }
@@ -90,7 +93,7 @@ export async function loadProfile() {
     db().from('playstyle_snapshots').select('tactical, primary_style').eq('player_id', id).order('computed_at', { ascending: false }).limit(1).maybeSingle(),
     db().from('wardrobe_overview').select('id', { count: 'exact', head: true }).eq('kind', 'racket').is('retired_at', null),
     db().from('calendar_events').select('id', { count: 'exact', head: true }).gte('starts_at', new Date().toISOString()),
-    db().from('invoices').select('amount_cents').eq('status', 'open'),
+    db().from('invoices').select('amount_cents').in('status', ['open', 'processing']),
   ])
   const profile = ok(p)
   const s = style.data
@@ -115,8 +118,12 @@ export type Profile = Awaited<ReturnType<typeof loadProfile>>
 export async function saveProfile(fields: { full_name: string; ntrp: number | null; backhand_style: string }) {
   ok(await db().from('profiles').update(fields).eq('id', await uid()))
 }
-export async function saveSettings(settings: Row) {
-  ok(await db().from('profiles').update({ settings }).eq('id', await uid()))
+export async function saveSettings(update: (current: Row) => Row) {
+  const id = await uid()
+  const cur = ok(await db().from('profiles').select('settings').eq('id', id).single())
+  const settings = update(cur.settings ?? {})
+  ok(await db().from('profiles').update({ settings }).eq('id', id))
+  return settings
 }
 
 const setScores = (score: string | null) => (score ?? '').split(/\s+/).filter(Boolean).map(set => {
@@ -134,7 +141,7 @@ export async function loadHome() {
     db().from('wardrobe_overview').select('*').eq('kind', 'racket').is('retired_at', null).order('primary_item', { ascending: false }).limit(1).maybeSingle(),
     db().from('swing_analyses').select('*').eq('player_id', id).eq('status', 'succeeded').order('created_at', { ascending: false }).limit(1).maybeSingle(),
     db().from('profiles').select('home_court_id').eq('id', id).single(),
-    db().from('invoices').select('*').eq('status', 'open').order('due_at', { ascending: true, nullsFirst: false }).limit(1).maybeSingle(),
+    db().from('invoices').select('*').in('status', ['open', 'processing']).order('due_at', { ascending: true, nullsFirst: false }).limit(1).maybeSingle(),
   ])
   let courtQ = db().from('court_availability').select('*').gte('starts_at', now.toISOString()).order('starts_at').limit(3)
   courtQ = profile.data?.home_court_id ? courtQ.eq('court_id', profile.data.home_court_id) : courtQ.eq('favorite', true)
@@ -176,7 +183,7 @@ export async function toggleChecklist(id: string, done: boolean) {
   ok(await db().from('checklist_items').update({ done_at: done ? new Date().toISOString() : null }).eq('id', id))
 }
 
-export async function reserveSlot(slotId: string): Promise<CheckoutItem> {
+export async function reserveSlot(slotId: string): Promise<CheckoutItem | null> {
   const res = await rpc<Row>('reserve_court_slot', { p_slot: slotId })
   return invoiceItem(res.invoice_id)
 }
@@ -332,7 +339,7 @@ export async function loadClasses() {
     level: Number(c.level_max ?? 7) <= 3 ? 'Beginner' : 'Intermediate',
   }))
 }
-export async function joinClass(id: string): Promise<CheckoutItem> {
+export async function joinClass(id: string): Promise<CheckoutItem | null> {
   const e = await rpc<Row>('enroll_in_class', { p_class: id })
   return invoiceItem(e.invoice_id)
 }
@@ -349,7 +356,10 @@ export async function loadCoaches() {
 }
 export async function setFollow(coachId: string, follow: boolean) {
   const student_id = await uid()
-  if (follow) ok(await db().from('follows').insert({ student_id, coach_id: coachId }))
+  if (follow) {
+    ok(await db().from('follows').insert({ student_id, coach_id: coachId }))
+    ok(await db().from('conversations').upsert({ student_id, coach_id: coachId }, { onConflict: 'student_id,coach_id', ignoreDuplicates: true }))
+  }
   else ok(await db().from('follows').delete().eq('student_id', student_id).eq('coach_id', coachId))
 }
 
@@ -407,7 +417,7 @@ export async function loadCourtDay(day: Date) {
   for (const s of ok(slots) ?? []) {
     if (!venues.has(s.facility_id)) venues.set(s.facility_id, { id: s.facility_id, name: s.facility_name, tag: `${String(s.facility_kind ?? 'public').toUpperCase()} · ${String(s.surface).toUpperCase()}`, address: addr[s.facility_id] ?? '', clay: s.surface === 'clay', slots: [] })
     const v = venues.get(s.facility_id)!
-    if (v.slots.length < 4) v.slots.push({ id: s.slot_id, time: clock(s.starts_at), price: dollars(s.hourly_rate_cents * (new Date(s.ends_at).getTime() - new Date(s.starts_at).getTime()) / 3_600_000) })
+    v.slots.push({ id: s.slot_id, time: clock(s.starts_at), price: dollars(s.hourly_rate_cents * (new Date(s.ends_at).getTime() - new Date(s.starts_at).getTime()) / 3_600_000) })
   }
   return [...venues.values()]
 }
@@ -425,7 +435,7 @@ export async function loadLessonOptions(coachId: string | null, kind: string) {
     times,
   }
 }
-export async function bookLesson(availabilityId: string, kind: string, courtId: string | null): Promise<CheckoutItem> {
+export async function bookLesson(availabilityId: string, kind: string, courtId: string | null): Promise<CheckoutItem | null> {
   const l = await rpc<Row>('book_lesson', { p_availability: availabilityId, p_kind: kind, p_court: courtId, p_use_credit: false })
   return invoiceItem(l.invoice_id)
 }

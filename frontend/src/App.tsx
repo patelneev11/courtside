@@ -146,7 +146,7 @@ function Home({ go, pay }: { go: (t: Tab) => void; pay: (item: CheckoutItem) => 
   const chosen = slots.find(s => s.id === slot) ?? slots.find(s => s.open) ?? slots[1] ?? slots[0]
   const reserve = () => {
     if (!live || !chosen) return go('Book')
-    reserveSlot(chosen.id).then(item => { pay(item); reload() }, e => setError(e.message))
+    reserveSlot(chosen.id).then(item => { if (item) pay(item); reload() }, e => setError(e.message))
   }
   return <main>
     <section className="hero">
@@ -473,7 +473,7 @@ function Classes({ checkout }: { checkout: (item: CheckoutItem) => void }) {
   const join = (id: string) => {
     if (!live) return
     setError(null)
-    joinClass(id).then(checkout, e => setError(e.message))
+    joinClass(id).then(item => { if (item) checkout(item) }, e => setError(e.message))
   }
   return <section className="directory"><div className="directory-tools"><div className="segmented">{['All levels','Beginner','Intermediate'].map(l=><button className={level===l?'active':''} onClick={()=>setLevel(l)} key={l}>{l}</button>)}</div><button className="secondary">Brooklyn · within 5 mi⌄</button></div>{error && <p className="source-note">{error}</p>}<div className="class-grid">{classes.map((c,i)=><article className="card class-card" key={c.id}><div className={`class-art a${i % 3}`}><EmptyArt type="court"/><span>{c.when}</span></div><div className="card-top"><span className="tag">GROUP CLINIC · {level.toUpperCase()}</span><span className="live"><i/>{c.spots}</span></div><h3>{c.title}</h3><p>{c.coach} · {c.venue}</p><div className="class-footer"><strong>{c.price}</strong><button className="primary" onClick={()=>join(c.id)}>Join class</button></div></article>)}</div></section>
 }
@@ -535,7 +535,7 @@ function Book({ checkout }: { checkout: (item: CheckoutItem) => void }) {
   const reserve = (id: string | undefined) => {
     if (!id) return
     setError(null)
-    reserveSlot(id).then(item => { checkout(item); venues.reload() }, e => setError(e.message))
+    reserveSlot(id).then(item => { if (item) checkout(item); venues.reload() }, e => setError(e.message))
   }
   const list = venues.data ?? []
   const first = list[0]
@@ -594,7 +594,7 @@ function LessonBooking({checkout}:{checkout:(item:CheckoutItem)=>void}) {
   const book = () => {
     if (!slot) return
     setError(null)
-    bookLesson(slot.id, kind, court || null).then(item => { checkout(item); opts.reload() }, e => setError(e.message))
+    bookLesson(slot.id, kind, court || null).then(item => { if (item) checkout(item); opts.reload() }, e => setError(e.message))
   }
   return <section className="lesson-booking"><div className="lesson-controls card"><p className="eyebrow">PRIVATE COACHING</p><h2>Choose your session.</h2><label>Coach<select value={o.coach?.id ?? ''} onChange={e=>{setCoach(e.target.value);setTime('')}}>{o.coaches.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Session type<select value={kind} onChange={e=>{setKind(e.target.value);setTime('')}}><option value="private">Private lesson · 60 min</option><option value="semi_private">Semi-private hit · 60 min</option></select></label><label>Court<select value={court} onChange={e=>setCourt(e.target.value)}><option value="">Coach’s usual court</option>{o.courts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div><div className="lesson-times"><p className="eyebrow">{o.day}</p><h3>Available times with {o.coach?.name.split(' ')[0] ?? 'your coach'}</h3><div>{o.times.map(t=><button className={slot?.id===t.id?'selected':''} onClick={()=>setTime(t.id)} key={t.id}>{t.time}</button>)}</div><div className="lesson-total"><span><small>YOUR SESSION</small><strong>{slot ? `${slot.time} · ${slot.minutes} minutes` : 'No open times'}</strong></span><b>{price}</b></div><button className="primary wide" onClick={book} disabled={!slot}>Continue to payment</button>{error && <small className="secure">{error}</small>}</div></section>
 }
@@ -634,9 +634,9 @@ function ProfileDrawer({ close, dark, setDark, me, onSaved }: { close: () => voi
       .then(() => { setStatus('Saved'); onSaved() }, e => setStatus(e.message))
   }
   const toggleSetting = (i: number) => {
-    const next = settingKeys[i][2](settings, !settingKeys[i][1](settings))
-    setLocalSettings(next)
-    if (live) saveSettings(next).catch(e => setStatus(e.message))
+    const on = !settingKeys[i][1](settings)
+    setLocalSettings(s => settingKeys[i][2](s, on))
+    if (live) saveSettings(s => settingKeys[i][2](s, on)).then(setLocalSettings, e => setStatus(e.message))
   }
   const logout = () => { if (live) signOut().then(close) }
   const racket = live ? data?.racket : { name: 'Blade 98 · Primary', detail: '52 lbs · 12.5 hours played' }
@@ -691,7 +691,7 @@ export default function App() {
   const [version, setVersion] = useState(0)
   const { session, ready } = useSession()
   const userId = session?.user.id
-  const me = useData(loadProfile, [userId, version])
+  const me = useData(loadProfile, [userId])
   const content = useMemo(() => {
     if (active === 'Home') return <Home key={version} go={setActive} pay={setCheckout}/>
     if (active === 'Stats') return <Stats/>
@@ -705,7 +705,7 @@ export default function App() {
     <Header active={active} setActive={setActive} openProfile={()=>setProfile(true)} dark={dark} setDark={setDark} me={me.data}/>
     {content}
     <nav className="mobile-nav">{nav.map(item=><button key={item.name} className={active===item.name?'active':''} onClick={()=>setActive(item.name)}><Icon name={item.icon}/><small>{item.name}</small></button>)}</nav>
-    {profile && <ProfileDrawer close={()=>setProfile(false)} dark={dark} setDark={setDark} me={me.data} onSaved={()=>setVersion(v=>v+1)}/>}
+    {profile && <ProfileDrawer close={()=>setProfile(false)} dark={dark} setDark={setDark} me={me.data} onSaved={()=>{setVersion(v=>v+1); me.reload()}}/>}
     {checkout && <Checkout item={checkout} close={()=>setCheckout(null)} onPaid={()=>setVersion(v=>v+1)}/>}
   </div>
 }
