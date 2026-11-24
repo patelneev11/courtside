@@ -1,0 +1,10 @@
+{
+  "description": "Upload and manage PDF documents in one convenient place, making it easy to access and organize your files.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
