@@ -34,9 +34,10 @@ serve(async (req) => {
     }
     try {
       if (!isAdmin) {
-        const { data: existing } = await db.from('reels').select('id, status, embed_url').eq('source', 'instagram').eq('external_id', parsed.shortcode).maybeSingle();
+        const { data: existing } = await db.from('reels').select('id, status, embed_url, imported_by').eq('source', 'instagram').eq('external_id', parsed.shortcode).maybeSingle();
         if (existing) {
-          results.push({ url: raw, ok: true, reel: existing, already_imported: true });
+          const visible = existing.status === 'published' || existing.imported_by === user.id;
+          results.push({ url: raw, ok: true, already_imported: true, reel: visible ? { id: existing.id, status: existing.status, embed_url: existing.embed_url } : null });
           continue;
         }
       }
