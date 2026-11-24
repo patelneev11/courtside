@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { HttpError } from './http.ts';
 
 export interface StepDef {
   key: string;
@@ -14,6 +15,11 @@ export class AgentJob {
   }
 
   static async create(db: SupabaseClient, userId: string, kind: string, input: unknown, defs: StepDef[]): Promise<AgentJob> {
+    // Per-account cap on paid AI/retailer work.
+    const limit = Number(Deno.env.get('AGENT_JOBS_PER_HOUR') ?? 30);
+    const since = new Date(Date.now() - 3_600_000).toISOString();
+    const { count } = await db.from('agent_jobs').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', since);
+    if ((count ?? 0) >= limit) throw new HttpError(429, `limit of ${limit} analyses per hour reached; try again later`);
     const { data, error } = await db
       .from('agent_jobs')
       .insert({ user_id: userId, kind, input, steps: defs.map((d) => ({ ...d, status: 'pending' })) })

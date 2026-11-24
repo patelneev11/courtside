@@ -61,5 +61,6 @@ Set these with `supabase secrets set`. Every function works without them in deve
 | `CV_SERVICE_URL`, `CV_SERVICE_TOKEN` | Pose estimation worker for swing analysis |
 | `CRON_SECRET` | Court-alerts scheduler |
 | `APP_URL` | Checkout/onboarding return URLs |
+| `AGENT_JOBS_PER_HOUR` | Per-account cap on AI/deal-search jobs (default 30) |
 
 Set `ALLOW_MOCK_PAYMENTS=false` in production.
