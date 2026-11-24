@@ -49,8 +49,16 @@ async function handle(db: ReturnType<typeof adminClient>, event: any) {
       });
       if (error) throw error;
       if (settled?.status === 'void' && stripeConfigured() && o.payment_intent) {
-        // Destination charges: pull the coach's transfer and the platform fee back too.
-        await stripe('POST', 'refunds', { payment_intent: o.payment_intent, ...(settled.payee_coach_id ? { reverse_transfer: true, refund_application_fee: true } : {}), metadata: { reason: 'booking_cancelled', invoice_id: invoiceId } });
+        const metadata = { reason: 'booking_cancelled', invoice_id: invoiceId };
+        try {
+          // Destination charges: pull the coach's transfer and the platform fee back too.
+          await stripe('POST', 'refunds', { payment_intent: o.payment_intent, ...(settled.payee_coach_id ? { reverse_transfer: true, refund_application_fee: true } : {}), metadata });
+        } catch (e) {
+          if (!settled.payee_coach_id) throw e;
+          // Coach balance can't cover the reversal: refund the customer anyway; the platform absorbs it.
+          console.error('transfer reversal failed; refunding from platform balance', invoiceId, e);
+          await stripe('POST', 'refunds', { payment_intent: o.payment_intent, metadata: { ...metadata, transfer_reversed: 'false' } });
+        }
       }
       return;
     }
