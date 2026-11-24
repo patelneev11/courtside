@@ -5,7 +5,7 @@ import { AgentJob } from '../_shared/jobs.ts';
 import { extractPoseMetrics } from './cv.ts';
 import * as T from './tasks.ts';
 
-type Kind = 'match_analysis' | 'playstyle' | 'workout' | 'drills' | 'swing_analysis' | 'racket_recommendation' | 'training_load';
+type Kind = 'match_analysis' | 'playstyle' | 'workout' | 'drills' | 'swing_analysis' | 'racket_recommendation' | 'training_load' | 'coach_chat';
 // deno-lint-ignore no-explicit-any
 type Body = { kind: Kind; player_id?: string } & Record<string, any>;
 
@@ -17,6 +17,7 @@ const STEPS: Record<Kind, { key: string; label: string }[]> = {
   swing_analysis: [{ key: 'cv', label: 'Tracking body pose' }, { key: 'claude', label: 'Reviewing checkpoints' }, { key: 'save', label: 'Saving findings' }],
   racket_recommendation: [{ key: 'gather', label: 'Reading your game' }, { key: 'claude', label: 'Matching rackets' }, { key: 'save', label: 'Saving picks' }],
   training_load: [{ key: 'gather', label: 'Syncing wearable sessions' }, { key: 'claude', label: 'Assessing load' }, { key: 'save', label: 'Saving' }],
+  coach_chat: [{ key: 'gather', label: 'Reading your recent game' }, { key: 'claude', label: 'Thinking' }],
 };
 
 // POST /tennis-agent { kind, ...params } -> 202 { job_id }. Progress streams via Realtime on agent_jobs.
@@ -212,6 +213,27 @@ const RUNNERS: Record<Kind, Runner> = {
         await admin.from('notifications').insert({ user_id: playerId, kind: 'training_load', title: 'Ease off this week', body: r.output.headline, payload: { job_id: job.id } });
       }
       await job.succeed({ acute_chronic_ratio: Number(ratio.toFixed(2)), ...r.output }, r);
+    };
+  },
+
+  async coach_chat({ db, job, playerId, body }) {
+    const question = typeof body.question === 'string' ? body.question.trim().slice(0, 1000) : '';
+    if (!question) throw new HttpError(400, 'question required');
+    const history = Array.isArray(body.history) ? body.history.slice(-8) : [];
+    return async () => {
+      await job.step('gather');
+      const [match, swing, drills] = await Promise.all([
+        db.from('matches').select('opponent_name, played_at, surface, score, result, stats, ai_takeaway').eq('player_id', playerId).order('played_at', { ascending: false }).limit(1).maybeSingle(),
+        db.from('swing_analyses').select('stroke, key_finding, summary, overall_score').eq('player_id', playerId).eq('status', 'succeeded').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        db.from('drills').select('title, description').eq('player_id', playerId).eq('active', true).limit(5),
+      ]);
+      await job.step('claude');
+      const r = await callClaude({
+        task: T.coachChat.task,
+        input: { question, history, match: match.data, swing: swing.data, drills: drills.data },
+        schema: T.coachChat.schema, mock: () => T.coachChat.mock(question, swing.data?.key_finding),
+      });
+      await job.succeed(r.output, r);
     };
   },
 };
